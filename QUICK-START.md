@@ -5,12 +5,6 @@
 
 ## 1. Access RHACS (1 minute)
 
-**URL:** https://dc0429findstudiedturn.demos.rox.systems/login
-
-```
-Username: admin
-Password: qOUGnbzUDUPjy9LI6t4EAkaUY
-```
 
 ---
 
