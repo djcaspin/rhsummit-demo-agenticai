@@ -1,0 +1,84 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent
+  namespace: ai-workload-demo
+  labels:
+    app: ai-agent
+    component: inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-agent
+  template:
+    metadata:
+      labels:
+        app: ai-agent
+        component: inference
+        security.openshift.io/scc.podSecurityLabelSync: "false"
+    spec:
+      serviceAccountName: ai-agent-sa
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ai-agent
+        image: python:3.11-slim
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            echo "AI Agent starting..."
+            echo "Simulating AI inference workload..."
+            # Simulate normal AI agent behavior
+            python3 -c "
+            import time
+            import http.server
+            import socketserver
+
+            PORT = 8080
+
+            class AIHandler(http.server.SimpleHTTPRequestHandler):
+                def do_GET(self):
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(b'{\"status\": \"AI Agent Running\", \"mode\": \"inference\"}')
+
+            print(f'AI Agent serving on port {PORT}')
+            with socketserver.TCPServer(('', PORT), AIHandler) as httpd:
+                httpd.serve_forever()
+            "
+        ports:
+        - containerPort: 8080
+          name: http
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: false
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-agent
+  namespace: ai-workload-demo
+spec:
+  selector:
+    app: ai-agent
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http

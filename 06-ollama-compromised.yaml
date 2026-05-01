@@ -1,0 +1,117 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama-compromised
+  namespace: production-ai
+  labels:
+    app: ollama-compromised
+    component: inference-server-compromised
+    ai-workload: "true"
+    attack-simulation: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama-compromised
+  template:
+    metadata:
+      labels:
+        app: ollama-compromised
+        component: inference-server-compromised
+        ai-workload: "true"
+      annotations:
+        description: "ATTACK SIMULATION - Compromised AI workload attempting container escape"
+    spec:
+      serviceAccountName: ollama-sa
+      # ATTACK: Access host namespaces
+      hostPID: true          # Access host process namespace
+      hostNetwork: true      # Access host network
+      hostIPC: true          # Access host IPC
+      securityContext:
+        runAsNonRoot: false  # ATTACK: Run as root
+        runAsUser: 0         # ATTACK: Explicitly root
+      containers:
+      - name: ollama-compromised
+        image: ollama/ollama:latest
+        ports:
+        - containerPort: 11434
+          name: http
+          protocol: TCP
+        env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        - name: OLLAMA_MODELS
+          value: "/models"
+        # ATTACK: Steal models from other pods
+        - name: STEAL_MODELS_FROM
+          value: "/host/var/lib/kubelet/pods"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        # ATTACK: Privileged container with dangerous capabilities
+        securityContext:
+          privileged: true    # ATTACK: Full privileged access
+          allowPrivilegeEscalation: true
+          runAsNonRoot: false
+          runAsUser: 0
+          capabilities:
+            add:
+              - SYS_ADMIN      # ATTACK: Mount filesystems, modify kernel params
+              - NET_ADMIN      # ATTACK: Network manipulation
+              - SYS_PTRACE     # ATTACK: Debug other processes
+              - DAC_OVERRIDE   # ATTACK: Bypass file permissions
+              - SYS_MODULE     # ATTACK: Load kernel modules
+          readOnlyRootFilesystem: false
+        volumeMounts:
+        - name: models
+          mountPath: /models
+        # ATTACK: Mount host filesystem to steal data
+        - name: host-root
+          mountPath: /host
+        # ATTACK: Access host container runtime socket
+        - name: container-socket
+          mountPath: /var/run/docker.sock
+        # ATTACK: Access Kubernetes secrets
+        - name: host-secrets
+          mountPath: /host-secrets
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: ollama-models
+      # ATTACK VECTORS: Mounting host paths
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory
+      - name: container-socket
+        hostPath:
+          path: /var/run/docker.sock
+          type: Socket
+      - name: host-secrets
+        hostPath:
+          path: /var/lib/kubelet/pods
+          type: Directory
+---
+# This service is not needed for the attack demo
+# but included to show complete deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-compromised
+  namespace: production-ai
+  labels:
+    app: ollama-compromised
+spec:
+  type: ClusterIP
+  ports:
+  - port: 11434
+    targetPort: 11434
+    protocol: TCP
+    name: http
+  selector:
+    app: ollama-compromised

@@ -1,0 +1,201 @@
+# RHACS Security Policies for AI Workload Protection
+# These policies detect and block container escape attempts
+
+---
+# Policy 1: Block Privilege Escalation in AI Workloads
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhacs-policy-privilege-escalation
+  namespace: stackrox
+data:
+  policy.json: |
+    {
+      "name": "AI Workload - Block Privilege Escalation",
+      "description": "Detects and blocks AI workloads attempting privilege escalation",
+      "severity": "CRITICAL_SEVERITY",
+      "disabled": false,
+      "categories": ["Privilege Escalation"],
+      "lifecycleStages": ["DEPLOY"],
+      "eventSource": "DEPLOYMENT_EVENT",
+      "exclusions": [],
+      "scope": [
+        {
+          "namespace": "ai-workload-demo"
+        }
+      ],
+      "policyVersion": "1.1",
+      "policySections": [
+        {
+          "sectionName": "Privilege Escalation Check",
+          "policyGroups": [
+            {
+              "fieldName": "Privileged Container",
+              "values": [
+                {
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "fieldName": "Allow Privilege Escalation",
+              "values": [
+                {
+                  "value": "true"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "mitreAttackVectors": [
+        {
+          "tactic": "TA0004",
+          "techniques": ["T1611"]
+        }
+      ],
+      "criteriaLocked": false,
+      "mitreVectorsLocked": false,
+      "isDefault": false,
+      "enforcementActions": ["SCALE_TO_ZERO_ENFORCEMENT", "FAIL_BUILD_ENFORCEMENT"]
+    }
+
+---
+# Policy 2: Block Host Namespace Access
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhacs-policy-host-namespace
+  namespace: stackrox
+data:
+  policy.json: |
+    {
+      "name": "AI Workload - Block Host Namespace Access",
+      "description": "Prevents AI workloads from accessing host PID, IPC, or Network namespaces",
+      "severity": "CRITICAL_SEVERITY",
+      "disabled": false,
+      "categories": ["Container Escape"],
+      "lifecycleStages": ["DEPLOY"],
+      "eventSource": "DEPLOYMENT_EVENT",
+      "scope": [
+        {
+          "namespace": "ai-workload-demo"
+        }
+      ],
+      "policyVersion": "1.1",
+      "policySections": [
+        {
+          "sectionName": "Host Namespace Check",
+          "policyGroups": [
+            {
+              "fieldName": "Host PID",
+              "values": [
+                {
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "fieldName": "Host IPC",
+              "values": [
+                {
+                  "value": "true"
+                }
+              ]
+            },
+            {
+              "fieldName": "Host Network",
+              "values": [
+                {
+                  "value": "true"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "enforcementActions": ["SCALE_TO_ZERO_ENFORCEMENT", "FAIL_BUILD_ENFORCEMENT"]
+    }
+
+---
+# Policy 3: Block Dangerous Capabilities
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhacs-policy-dangerous-capabilities
+  namespace: stackrox
+data:
+  policy.json: |
+    {
+      "name": "AI Workload - Block Dangerous Capabilities",
+      "description": "Blocks AI workloads with dangerous Linux capabilities",
+      "severity": "HIGH_SEVERITY",
+      "disabled": false,
+      "categories": ["Privilege Escalation"],
+      "lifecycleStages": ["DEPLOY"],
+      "eventSource": "DEPLOYMENT_EVENT",
+      "scope": [
+        {
+          "namespace": "ai-workload-demo"
+        }
+      ],
+      "policyVersion": "1.1",
+      "policySections": [
+        {
+          "sectionName": "Dangerous Capabilities",
+          "policyGroups": [
+            {
+              "fieldName": "Add Capabilities",
+              "values": [
+                {"value": "SYS_ADMIN"},
+                {"value": "NET_ADMIN"},
+                {"value": "SYS_PTRACE"},
+                {"value": "SYS_MODULE"},
+                {"value": "DAC_OVERRIDE"},
+                {"value": "DAC_READ_SEARCH"}
+              ]
+            }
+          ]
+        }
+      ],
+      "enforcementActions": ["SCALE_TO_ZERO_ENFORCEMENT"]
+    }
+
+---
+# Policy 4: Block Host Path Mounts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rhacs-policy-host-mounts
+  namespace: stackrox
+data:
+  policy.json: |
+    {
+      "name": "AI Workload - Block Host Path Mounts",
+      "description": "Prevents AI workloads from mounting host filesystem paths",
+      "severity": "CRITICAL_SEVERITY",
+      "disabled": false,
+      "categories": ["Container Escape"],
+      "lifecycleStages": ["DEPLOY"],
+      "eventSource": "DEPLOYMENT_EVENT",
+      "scope": [
+        {
+          "namespace": "ai-workload-demo"
+        }
+      ],
+      "policyVersion": "1.1",
+      "policySections": [
+        {
+          "sectionName": "Host Mount Check",
+          "policyGroups": [
+            {
+              "fieldName": "Volume Type",
+              "values": [
+                {"value": "HostPath"}
+              ]
+            }
+          ]
+        }
+      ],
+      "enforcementActions": ["SCALE_TO_ZERO_ENFORCEMENT", "FAIL_BUILD_ENFORCEMENT"]
+    }

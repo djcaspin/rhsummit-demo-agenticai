@@ -1,0 +1,145 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production-ai
+  labels:
+    security-tier: high
+    workload-type: ai-inference
+    demo: rhacs-ai-protection
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ollama-sa
+  namespace: production-ai
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+  namespace: production-ai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama-inference
+  namespace: production-ai
+  labels:
+    app: ollama
+    component: inference-server
+    ai-workload: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+        component: inference-server
+        ai-workload: "true"
+      annotations:
+        # RHACS will monitor this
+        security.stackrox.io/workload-type: "ai-inference"
+    spec:
+      serviceAccountName: ollama-sa
+      securityContext:
+        # Pod-level security - OpenShift compatible
+        runAsNonRoot: true
+        # Let OpenShift assign UID from namespace range
+        # runAsUser: 1000  # Removed - OpenShift will auto-assign
+        # fsGroup: 1000    # Removed - OpenShift will auto-assign
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        ports:
+        - containerPort: 11434
+          name: http
+          protocol: TCP
+        env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        - name: OLLAMA_MODELS
+          value: "/models"
+        - name: HOME
+          value: "/models"
+        # Resource limits adjusted for demo cluster
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        # Strong security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          # runAsUser: 1000  # Let OpenShift assign from namespace UID range
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: false  # Ollama needs to write model cache
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: models
+          mountPath: /models
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 11434
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 11434
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: ollama-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: production-ai
+  labels:
+    app: ollama
+spec:
+  type: ClusterIP
+  ports:
+  - port: 11434
+    targetPort: 11434
+    protocol: TCP
+    name: http
+  selector:
+    app: ollama
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ollama
+  namespace: production-ai
+spec:
+  to:
+    kind: Service
+    name: ollama
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

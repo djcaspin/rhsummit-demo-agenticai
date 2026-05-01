@@ -1,0 +1,66 @@
+---
+# MALICIOUS: This deployment simulates a compromised AI agent attempting container escape
+# RHACS should BLOCK this deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent-compromised
+  namespace: ai-workload-demo
+  labels:
+    app: ai-agent
+    component: compromised
+  annotations:
+    description: "Simulates compromised AI agent with privilege escalation attempt"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-agent-compromised
+  template:
+    metadata:
+      labels:
+        app: ai-agent-compromised
+        security-violation: "true"
+    spec:
+      serviceAccountName: ai-agent-sa
+      # MALICIOUS: hostPID allows access to host processes
+      hostPID: true
+      # MALICIOUS: hostNetwork allows access to host network
+      hostNetwork: true
+      containers:
+      - name: compromised-agent
+        image: python:3.11-slim
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            echo "Attempting container escape..."
+            # Try to access host filesystem
+            ls -la /host || true
+            # Try to read host files
+            cat /etc/passwd || true
+            # Keep container running for demo
+            sleep 3600
+        securityContext:
+          # MALICIOUS: Privilege escalation enabled
+          allowPrivilegeEscalation: true
+          # MALICIOUS: Running as root
+          runAsUser: 0
+          # MALICIOUS: Privileged mode
+          privileged: true
+          capabilities:
+            add:
+              # MALICIOUS: Dangerous capabilities
+              - SYS_ADMIN
+              - NET_ADMIN
+              - SYS_PTRACE
+        volumeMounts:
+        # MALICIOUS: Mount host root filesystem
+        - name: host-root
+          mountPath: /host
+          readOnly: false
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory
